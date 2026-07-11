@@ -5,6 +5,7 @@ class AchievementDefinition {
     required this.description,
     required this.target,
     required this.iconKey,
+    required this.rewardCoins,
   });
 
   final String id;
@@ -12,6 +13,7 @@ class AchievementDefinition {
   final String description;
   final int target;
   final String iconKey;
+  final int rewardCoins;
 }
 
 class AchievementRecord {
@@ -43,6 +45,18 @@ class AchievementState {
     if (record.target <= 0) return 0;
     return (record.progress / record.target).clamp(0, 1).toDouble();
   }
+}
+
+class AchievementEvaluationResult {
+  const AchievementEvaluationResult({
+    required this.states,
+    required this.newlyUnlocked,
+    required this.coinsAwarded,
+  });
+
+  final List<AchievementState> states;
+  final List<AchievementDefinition> newlyUnlocked;
+  final int coinsAwarded;
 }
 
 class DailyRiddleRecord {
