@@ -1,12 +1,12 @@
-# Bible Riddle — Phase A
+# Bible Riddle — Phase B
 
 A peaceful, minimalist, offline-first Bible riddle game foundation built with Flutter and Dart.
 
-## What this branch contains
+## Current scope
 
-Phase A is a playable offline foundation, not the full 1,000+ reviewed-level production release yet.
+Phase B builds on the playable Phase A loop and adds the production-oriented local data architecture required by the master specification.
 
-Included now:
+### Phase A playable loop
 
 - Splash/loading flow
 - First-run onboarding
@@ -25,16 +25,26 @@ Included now:
 - Python content validator
 - Basic unit test
 
-## Why this is Phase A
+### Phase B additions
 
-The master specification requires a complete production app with Drift, optional ads, purchases, achievements, challenge modes, statistics, Google Play release setup, automated tests, and 1,000+ reviewed Bible riddles. Phase A focuses on the core offline game loop first so the project can be run, tested, and expanded safely.
+- Drift/SQLite dependency configuration
+- Drift-ready schema for riddles, campaign sections, level progress, profile, economy, statistics, achievements, daily riddles, purchases, and app settings
+- Domain entity files for future repository-based architecture
+- Content and progress repository interfaces
+- App-level content validator and import gate
+- CSV-to-JSON import tool for spreadsheet-authored riddles
+- Database, import, and Phase B documentation
+- CI workflow prepared to run Drift code generation before analysis/tests
 
-The included sample riddles are marked `needs_review`. They are development content and should not be presented as a verified Bible-content release.
+## Production honesty
+
+This is still not the final production release. The included sample riddles are marked `needs_review`; only reviewed Bible content should ship.
 
 ## Run locally
 
 ```bash
 flutter pub get
+dart run build_runner build --delete-conflicting-outputs
 python tool/validate_content.py assets/data
 flutter test
 flutter run
@@ -46,9 +56,17 @@ If the Android/iOS platform folders are missing, generate them first:
 flutter create --platforms=android,ios,web .
 ```
 
+## Content authoring
+
+Convert spreadsheet CSV exports into JSON packs:
+
+```bash
+python tool/import_csv.py path/to/riddles.csv assets/data/custom_pack.json
+python tool/validate_content.py assets/data
+```
+
 ## Next phases
 
-- Phase B: Replace lightweight progress storage with Drift/SQLite, add generated models, and expand repository abstractions.
-- Phase C: Achievements, deeper statistics, daily riddle persistence, and challenge modes.
-- Phase D: Optional rewarded ads and purchase abstractions.
-- Phase E: 1,000+ content pipeline, review workflow, QA, and Google Play release preparation.
+- Phase C: Wire runtime providers to Drift, migrate SharedPreferences progress into SQLite, and add achievement/daily-riddle persistence.
+- Phase D: Challenge modes and deeper statistics.
+- Phase E: Optional rewarded ads, purchases, privacy controls, QA, 1,000+ reviewed content pipeline, and Google Play release preparation.
