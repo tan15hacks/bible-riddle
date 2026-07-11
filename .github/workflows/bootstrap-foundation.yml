@@ -1,0 +1,44 @@
+name: Bootstrap foundation
+
+on:
+  push:
+    branches:
+      - agent/phase-1-foundation
+    paths:
+      - '.bootstrap/**'
+      - '.github/workflows/bootstrap-foundation.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  expand-project:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Expand project archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat .bootstrap/part_* | base64 --decode > /tmp/bible-riddle-foundation.zip
+          unzip -oq /tmp/bible-riddle-foundation.zip -d .
+          rm -rf .bootstrap
+          rm -f .github/workflows/bootstrap-foundation.yml
+
+      - name: Commit expanded source
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          if git diff --cached --quiet; then
+            echo 'No expanded files to commit.'
+            exit 0
+          fi
+          git commit -m 'Build Bible Riddle phase 1 foundation'
+          git push origin HEAD:agent/phase-1-foundation
