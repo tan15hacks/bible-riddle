@@ -1,54 +1,64 @@
-# Bible Riddle — Phase A
+# Bible Riddle — Phase B
 
 A peaceful, minimalist, offline-first Bible riddle game foundation built with Flutter and Dart.
 
-## What this branch contains
+Phase A is merged. Phase B adds the production-facing data architecture needed before expanding features and content.
 
-Phase A is a playable offline foundation, not the full 1,000+ reviewed-level production release yet.
+## Included now
 
-Included now:
-
-- Splash/loading flow
-- First-run onboarding
-- Home screen
+- Playable offline Phase A game loop
+- Splash, onboarding, home, campaign, level, gameplay, progress, and settings screens
 - Separate Old Testament and New Testament campaigns
-- Section and level selection
-- Locked/unlocked level progression
-- Multiple-choice and typed-answer riddles
-- Accepted-answer matching
-- Hint reveal with coin cost
-- Star and coin rewards
-- Local progress persistence with SharedPreferences
-- Progress/statistics screen
-- Settings with reset progress
-- Bundled JSON content
+- Bundled JSON sample content marked `needs_review`
 - Python content validator
-- Basic unit test
+- Drift-ready SQLite schema
+- Domain entities and repository contracts
+- Content import and validation services
+- CSV-to-JSON import tooling
+- CI workflow for validation, generation, analysis, and tests
+- Documentation for database, content import, review, testing, and release preparation
 
-## Why this is Phase A
+## Why Phase B matters
 
-The master specification requires a complete production app with Drift, optional ads, purchases, achievements, challenge modes, statistics, Google Play release setup, automated tests, and 1,000+ reviewed Bible riddles. Phase A focuses on the core offline game loop first so the project can be run, tested, and expanded safely.
-
-The included sample riddles are marked `needs_review`. They are development content and should not be presented as a verified Bible-content release.
+The master specification requires more than static screens. The app must support offline persistence, scalable content imports, validation gates, progress-safe updates, and future 1,000+ reviewed riddles. Phase B creates those boundaries while keeping the Phase A gameplay intact.
 
 ## Run locally
 
 ```bash
 flutter pub get
+dart run build_runner build --delete-conflicting-outputs
 python tool/validate_content.py assets/data
 flutter test
 flutter run
 ```
 
-If the Android/iOS platform folders are missing, generate them first:
+If platform folders are missing:
 
 ```bash
 flutter create --platforms=android,ios,web .
 ```
 
-## Next phases
+## Content workflow
 
-- Phase B: Replace lightweight progress storage with Drift/SQLite, add generated models, and expand repository abstractions.
-- Phase C: Achievements, deeper statistics, daily riddle persistence, and challenge modes.
-- Phase D: Optional rewarded ads and purchase abstractions.
-- Phase E: 1,000+ content pipeline, review workflow, QA, and Google Play release preparation.
+1. Author content using the documented columns.
+2. Convert CSV when needed:
+
+   ```bash
+   python tool/import_csv.py content.csv assets/data/generated_content.json
+   ```
+
+3. Validate content:
+
+   ```bash
+   python tool/validate_content.py assets/data
+   ```
+
+4. Import only when there are no critical validation errors.
+
+## Production note
+
+Generated Bible riddles remain `needs_review` until a qualified review process marks them `reviewed`. Do not ship unreviewed generated content as verified production content.
+
+## Next phase
+
+Phase C wires the runtime gameplay flow to the repository/data layer, then adds achievements, daily-riddle persistence, challenge records, and richer statistics.
