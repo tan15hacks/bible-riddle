@@ -40,7 +40,10 @@ class AssetContentRepository implements ContentRepository {
     for (final riddle in _riddles.where((item) => item.testament == testament)) {
       ids.add(riddle.sectionId);
     }
-    final sections = ids.map((id) => _sections[id]).whereType<CampaignSection>().toList()
+    final sections = ids
+        .map((id) => _sections[id])
+        .whereType<CampaignSection>()
+        .toList()
       ..sort((a, b) => a.orderIndex.compareTo(b.orderIndex));
     return List.unmodifiable(sections);
   }
@@ -58,12 +61,16 @@ class AssetContentRepository implements ContentRepository {
     if (_loaded) return;
     final manifestText = await _bundle.loadString('assets/data/manifest.json');
     final manifest = jsonDecode(manifestText) as Map<String, dynamic>;
-    final files = List<String>.from(manifest['files'] as List? ?? const ['assets/data/riddles_phase_a.json']);
+    final files = List<String>.from(
+      manifest['files'] as List? ?? const ['assets/data/riddles_phase_a.json'],
+    );
 
     for (final file in files) {
       final contentText = await _bundle.loadString(file);
       final decoded = jsonDecode(contentText) as Map<String, dynamic>;
-      final riddles = List<Map<String, dynamic>>.from(decoded['riddles'] as List);
+      final riddles = List<Map<String, dynamic>>.from(
+        decoded['riddles'] as List,
+      );
       _riddles.addAll(riddles.map(Riddle.fromJson));
     }
 
@@ -75,7 +82,10 @@ class AssetContentRepository implements ContentRepository {
   void _backfillSectionsFromRiddles() {
     final seen = <String>{};
     for (final riddle in _riddles) {
-      if (!seen.add(riddle.sectionId) || _sections.containsKey(riddle.sectionId)) continue;
+      if (!seen.add(riddle.sectionId) ||
+          _sections.containsKey(riddle.sectionId)) {
+        continue;
+      }
       _sections[riddle.sectionId] = CampaignSection(
         id: riddle.sectionId,
         testament: riddle.testament,
