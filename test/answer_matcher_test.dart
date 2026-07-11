@@ -1,4 +1,5 @@
-import 'package:bible_riddle/main.dart';
+import 'package:bible_riddle/application/gameplay/answer_matcher.dart';
+import 'package:bible_riddle/application/gameplay/reward_rules.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
