@@ -38,7 +38,13 @@ void main() {
   });
 
   test('spendHint refuses when player lacks coins', () async {
-    final repo = MemoryProgressRepository(economy: const PlayerEconomy(coins: 10, totalCoinsEarned: 10, totalCoinsSpent: 0));
+    final repo = MemoryProgressRepository(
+      economy: const PlayerEconomy(
+        coins: 10,
+        totalCoinsEarned: 10,
+        totalCoinsSpent: 0,
+      ),
+    );
     final runtime = GameplayRuntime(repo);
 
     final result = await runtime.spendHint();
@@ -77,7 +83,12 @@ const sampleRiddle = Riddle(
 
 class MemoryProgressRepository implements ProgressRepository {
   MemoryProgressRepository({PlayerEconomy? economy})
-      : _economy = economy ?? const PlayerEconomy(coins: 120, totalCoinsEarned: 120, totalCoinsSpent: 0);
+      : _economy = economy ??
+            const PlayerEconomy(
+              coins: 120,
+              totalCoinsEarned: 120,
+              totalCoinsSpent: 0,
+            );
 
   final Map<String, LevelProgress> progress = {};
   PlayerEconomy _economy;
@@ -92,7 +103,12 @@ class MemoryProgressRepository implements ProgressRepository {
   );
 
   @override
-  Future<LevelProgress?> getLevelProgress(String riddleId) async => progress[riddleId];
+  Future<LevelProgress?> getLevelProgress(String riddleId) async =>
+      progress[riddleId];
+
+  @override
+  Future<Map<String, LevelProgress>> getAllLevelProgress() async =>
+      Map.unmodifiable(progress);
 
   @override
   Future<void> saveLevelProgress(LevelProgress progress) async {
@@ -113,5 +129,24 @@ class MemoryProgressRepository implements ProgressRepository {
   @override
   Future<void> saveStatistics(PlayerStatistics statistics) async {
     _statistics = statistics;
+  }
+
+  @override
+  Future<void> resetAllProgress() async {
+    progress.clear();
+    _economy = const PlayerEconomy(
+      coins: 120,
+      totalCoinsEarned: 120,
+      totalCoinsSpent: 0,
+    );
+    _statistics = const PlayerStatistics(
+      totalAnswers: 0,
+      correctAnswers: 0,
+      currentStreak: 0,
+      bestStreak: 0,
+      dailyStreak: 0,
+      totalPlayTime: Duration.zero,
+      challengeScoresJson: '{}',
+    );
   }
 }

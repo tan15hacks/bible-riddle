@@ -20,6 +20,18 @@ jobs:
       - name: Validate content
         run: python tool/validate_content.py assets/data
       - name: Analyze
-        run: flutter analyze
+        run: |
+          flutter analyze > analyze.log 2>&1 || {
+            cat analyze.log
+            exit 1
+          }
+      - name: Upload analyzer log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: flutter-analyze-log
+          path: analyze.log
+          if-no-files-found: ignore
+          retention-days: 3
       - name: Test
         run: flutter test
