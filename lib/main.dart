@@ -1,13 +1,14 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
+import 'application/bootstrap/runtime_bootstrap.dart';
 import 'application/gameplay/gameplay_runtime.dart';
 import 'application/gameplay/reward_rules.dart';
-import 'data/repositories/asset_content_repository.dart';
-import 'data/repositories/shared_preferences_progress_repository.dart';
 import 'domain/entities/riddle.dart';
 import 'domain/entities/testament.dart';
+import 'domain/repositories/progress_repository.dart';
 
 void main() {
   runApp(const ProviderScope(child: BibleRiddleApp()));
@@ -27,14 +28,13 @@ class SectionSummary {
 }
 
 class GameState extends ChangeNotifier {
-  final AssetContentRepository _contentRepository = AssetContentRepository();
-
-  SharedPreferences? _prefs;
-  SharedPreferencesProgressRepository? _progressRepository;
+  RuntimeDependencies? _dependencies;
+  ProgressRepository? _progressRepository;
   GameplayRuntime? _runtime;
 
   bool loaded = false;
   bool onboarded = false;
+  bool usingDrift = false;
   int coins = 120;
   int totalAnswers = 0;
   int correctAnswers = 0;
@@ -44,16 +44,16 @@ class GameState extends ChangeNotifier {
   final List<Riddle> riddles = [];
 
   Future<void> load() async {
-    _prefs = await SharedPreferences.getInstance();
-    _progressRepository = SharedPreferencesProgressRepository(_prefs!);
-    _runtime = GameplayRuntime(_progressRepository!);
+    final dependencies = await RuntimeBootstrap.create();
+    _dependencies = dependencies;
+    _progressRepository = dependencies.progressRepository;
+    _runtime = dependencies.gameplayRuntime;
 
-    onboarded = _prefs!.getBool('onboarded') ?? false;
-
-    final loadedRiddles = await _contentRepository.getRiddles();
+    onboarded = dependencies.preferences.getBool('onboarded') ?? false;
+    usingDrift = dependencies.usingDrift;
     riddles
       ..clear()
-      ..addAll(loadedRiddles);
+      ..addAll(dependencies.riddles);
 
     await _refreshProgress();
     loaded = true;
@@ -62,7 +62,7 @@ class GameState extends ChangeNotifier {
 
   Future<void> completeOnboarding() async {
     onboarded = true;
-    await _prefs?.setBool('onboarded', true);
+    await _dependencies?.preferences.setBool('onboarded', true);
     notifyListeners();
   }
 
@@ -170,6 +170,15 @@ class GameState extends ChangeNotifier {
         .where((part) => part.isNotEmpty)
         .map((part) => '${part[0].toUpperCase()}${part.substring(1)}')
         .join(' ');
+  }
+
+  @override
+  void dispose() {
+    final dependencies = _dependencies;
+    if (dependencies != null) {
+      unawaited(dependencies.dispose());
+    }
+    super.dispose();
   }
 }
 
@@ -730,6 +739,7 @@ class SettingsScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final state = ref.watch(gameProvider);
     return Scaffold(
       appBar: AppBar(title: const Text('Settings')),
       body: ListView(
@@ -746,11 +756,13 @@ class SettingsScreen extends ConsumerWidget {
             title: Text('Content status'),
             subtitle: Text('Sample riddles are marked needs_review.'),
           ),
-          const ListTile(
-            title: Text('Storage'),
+          ListTile(
+            title: const Text('Storage'),
             subtitle: Text(
-              'Gameplay uses repository-backed runtime services with a '
-              'SharedPreferences adapter.',
+              state.usingDrift
+                  ? 'Progress is stored offline in Drift SQLite.'
+                  : 'SQLite initialization failed, so the safe local '
+                      'SharedPreferences fallback is active.',
             ),
           ),
           const ListTile(
