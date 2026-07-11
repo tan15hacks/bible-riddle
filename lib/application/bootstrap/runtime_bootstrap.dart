@@ -1,6 +1,6 @@
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../../core/database/app_database.dart';
+import '../../core/database/app_database.dart' show AppDatabase;
 import '../../data/database/content_database_seeder.dart';
 import '../../data/migration/progress_migration_service.dart';
 import '../../data/repositories/asset_content_repository.dart';
