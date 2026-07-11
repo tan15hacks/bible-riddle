@@ -1,124 +1,21 @@
-import 'dart:convert';
-
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
+import 'application/gameplay/answer_matcher.dart';
+import 'application/gameplay/gameplay_runtime.dart';
+import 'application/gameplay/reward_rules.dart';
+import 'data/repositories/asset_content_repository.dart';
+import 'data/repositories/shared_preferences_progress_repository.dart';
+import 'domain/entities/player_progress.dart';
+import 'domain/entities/riddle.dart';
+import 'domain/entities/testament.dart';
 
 void main() {
   runApp(const ProviderScope(child: BibleRiddleApp()));
 }
 
 final gameProvider = ChangeNotifierProvider<GameState>((ref) => GameState()..load());
-
-enum Testament { old, newTestament }
-
-extension TestamentLabel on Testament {
-  String get key => this == Testament.old ? 'old' : 'new';
-  String get label => this == Testament.old ? 'Old Testament' : 'New Testament';
-}
-
-String normalizeAnswer(String input) {
-  return input
-      .toLowerCase()
-      .replaceAll(RegExp(r'[’‘`´]'), "'")
-      .replaceAll(RegExp(r'[^a-z0-9\s]'), ' ')
-      .replaceAll(RegExp(r'\s+'), ' ')
-      .trim();
-}
-
-bool isAcceptedAnswer(String input, List<String> acceptedAnswers) {
-  final normalized = normalizeAnswer(input);
-  return acceptedAnswers.any((answer) => normalizeAnswer(answer) == normalized);
-}
-
-bool isVeryCloseAnswer(String input, List<String> acceptedAnswers) {
-  final normalized = normalizeAnswer(input);
-  if (normalized.isEmpty) return false;
-  for (final answer in acceptedAnswers.map(normalizeAnswer)) {
-    if ((answer.contains(normalized) || normalized.contains(answer)) && normalized.length >= 3) {
-      return true;
-    }
-  }
-  return false;
-}
-
-int calculateStars({required int attempts, required int hintsUsed}) {
-  if (attempts <= 1 && hintsUsed == 0) return 3;
-  if (attempts <= 2 && hintsUsed <= 1) return 2;
-  return 1;
-}
-
-int calculateCoins({required int difficulty, required int stars}) {
-  return 10 + (difficulty >= 4 ? 5 : 0) + (stars == 3 ? 5 : 0);
-}
-
-class Riddle {
-  const Riddle({
-    required this.id,
-    required this.testament,
-    required this.sectionId,
-    required this.sectionTitle,
-    required this.book,
-    required this.reference,
-    required this.topic,
-    required this.storyEventId,
-    required this.questionType,
-    required this.difficulty,
-    required this.question,
-    required this.answer,
-    required this.acceptedAnswers,
-    required this.choices,
-    required this.hints,
-    required this.explanation,
-    required this.contentStatus,
-    required this.sortOrder,
-  });
-
-  final String id;
-  final Testament testament;
-  final String sectionId;
-  final String sectionTitle;
-  final String book;
-  final String reference;
-  final String topic;
-  final String storyEventId;
-  final String questionType;
-  final int difficulty;
-  final String question;
-  final String answer;
-  final List<String> acceptedAnswers;
-  final List<String> choices;
-  final List<String> hints;
-  final String explanation;
-  final String contentStatus;
-  final int sortOrder;
-
-  bool get isTyped => choices.isEmpty;
-
-  factory Riddle.fromJson(Map<String, dynamic> json) {
-    return Riddle(
-      id: json['id'] as String,
-      testament: json['testament'] == 'old' ? Testament.old : Testament.newTestament,
-      sectionId: json['sectionId'] as String,
-      sectionTitle: json['sectionTitle'] as String,
-      book: json['book'] as String,
-      reference: json['reference'] as String,
-      topic: json['topic'] as String,
-      storyEventId: json['storyEventId'] as String,
-      questionType: json['questionType'] as String,
-      difficulty: json['difficulty'] as int,
-      question: json['question'] as String,
-      answer: json['answer'] as String,
-      acceptedAnswers: List<String>.from(json['acceptedAnswers'] as List),
-      choices: List<String>.from(json['choices'] as List),
-      hints: List<String>.from(json['hints'] as List),
-      explanation: json['explanation'] as String,
-      contentStatus: json['contentStatus'] as String,
-      sortOrder: json['sortOrder'] as int,
-    );
-  }
-}
 
 class SectionSummary {
   SectionSummary(this.id, this.title, this.testament, this.riddles);
@@ -129,6 +26,12 @@ class SectionSummary {
 }
 
 class GameState extends ChangeNotifier {
+  final AssetContentRepository _contentRepository = AssetContentRepository();
+
+  SharedPreferences? _prefs;
+  SharedPreferencesProgressRepository? _progressRepository;
+  GameplayRuntime? _runtime;
+
   bool loaded = false;
   bool onboarded = false;
   int coins = 120;
@@ -138,31 +41,20 @@ class GameState extends ChangeNotifier {
   int bestStreak = 0;
   final Map<String, int> starsByRiddle = {};
   final List<Riddle> riddles = [];
-  SharedPreferences? _prefs;
 
   Future<void> load() async {
     _prefs = await SharedPreferences.getInstance();
+    _progressRepository = SharedPreferencesProgressRepository(_prefs!);
+    _runtime = GameplayRuntime(_progressRepository!);
+
     onboarded = _prefs!.getBool('onboarded') ?? false;
-    coins = _prefs!.getInt('coins') ?? 120;
-    totalAnswers = _prefs!.getInt('totalAnswers') ?? 0;
-    correctAnswers = _prefs!.getInt('correctAnswers') ?? 0;
-    currentStreak = _prefs!.getInt('currentStreak') ?? 0;
-    bestStreak = _prefs!.getInt('bestStreak') ?? 0;
-    final starsJson = _prefs!.getString('starsByRiddle');
-    if (starsJson != null) {
-      final decoded = jsonDecode(starsJson) as Map<String, dynamic>;
-      starsByRiddle.addAll(decoded.map((key, value) => MapEntry(key, value as int)));
-    }
-    final content = await rootBundle.loadString('assets/data/riddles_phase_a.json');
-    final decoded = jsonDecode(content) as Map<String, dynamic>;
+
+    final loadedRiddles = await _contentRepository.getRiddles();
     riddles
       ..clear()
-      ..addAll((decoded['riddles'] as List).map((item) => Riddle.fromJson(item as Map<String, dynamic>)));
-    riddles.sort((a, b) {
-      final testamentCompare = a.testament.index.compareTo(b.testament.index);
-      if (testamentCompare != 0) return testamentCompare;
-      return a.sortOrder.compareTo(b.sortOrder);
-    });
+      ..addAll(loadedRiddles);
+
+    await _refreshProgress();
     loaded = true;
     notifyListeners();
   }
@@ -183,7 +75,7 @@ class GameState extends ChangeNotifier {
       grouped.putIfAbsent(riddle.sectionId, () => []).add(riddle);
     }
     return grouped.entries
-        .map((entry) => SectionSummary(entry.key, entry.value.first.sectionTitle, testament, entry.value))
+        .map((entry) => SectionSummary(entry.key, _titleFromSectionId(entry.key), testament, entry.value))
         .toList();
   }
 
@@ -204,54 +96,58 @@ class GameState extends ChangeNotifier {
     return campaignRiddles(testament).fold(0, (total, riddle) => total + (starsByRiddle[riddle.id] ?? 0));
   }
 
-  Future<void> spendHintCoin() async {
-    coins -= 30;
-    await _save();
+  Future<bool> spendHintCoin() async {
+    final result = await _runtime!.spendHint();
+    await _refreshProgress();
     notifyListeners();
+    return result.success;
   }
 
-  Future<void> recordWrongAnswer() async {
-    totalAnswers += 1;
-    currentStreak = 0;
-    await _save();
-    notifyListeners();
-  }
-
-  Future<int> completeRiddle(Riddle riddle, {required int attempts, required int hintsUsed}) async {
-    final stars = calculateStars(attempts: attempts, hintsUsed: hintsUsed);
-    final previousStars = starsByRiddle[riddle.id] ?? 0;
-    if (stars > previousStars) {
-      starsByRiddle[riddle.id] = stars;
+  Future<AnswerResult> submitAnswer(Riddle riddle, {required String answer, required int attempts, required int hintsUsed}) async {
+    final result = await _runtime!.submitAnswer(
+      riddle: riddle,
+      answer: answer,
+      attempts: attempts,
+      hintsUsed: hintsUsed,
+    );
+    if (!result.correct) {
+      await _runtime!.recordWrongAnswer();
     }
-    final reward = calculateCoins(difficulty: riddle.difficulty, stars: stars);
-    coins += reward;
-    totalAnswers += 1;
-    correctAnswers += 1;
-    currentStreak += 1;
-    if (currentStreak > bestStreak) bestStreak = currentStreak;
-    await _save();
+    await _refreshProgress();
     notifyListeners();
-    return reward;
+    return result;
   }
 
   Future<void> resetProgress() async {
-    starsByRiddle.clear();
-    coins = 120;
-    totalAnswers = 0;
-    correctAnswers = 0;
-    currentStreak = 0;
-    bestStreak = 0;
-    await _save();
+    await _progressRepository?.resetAllProgress();
+    await _refreshProgress();
     notifyListeners();
   }
 
-  Future<void> _save() async {
-    await _prefs?.setInt('coins', coins);
-    await _prefs?.setInt('totalAnswers', totalAnswers);
-    await _prefs?.setInt('correctAnswers', correctAnswers);
-    await _prefs?.setInt('currentStreak', currentStreak);
-    await _prefs?.setInt('bestStreak', bestStreak);
-    await _prefs?.setString('starsByRiddle', jsonEncode(starsByRiddle));
+  Future<void> _refreshProgress() async {
+    final repo = _progressRepository;
+    if (repo == null) return;
+
+    final allProgress = await repo.getAllLevelProgress();
+    starsByRiddle
+      ..clear()
+      ..addEntries(allProgress.entries.where((entry) => entry.value.completed).map((entry) => MapEntry(entry.key, entry.value.stars)));
+
+    final economy = await repo.getEconomy();
+    final statistics = await repo.getStatistics();
+    coins = economy.coins;
+    totalAnswers = statistics.totalAnswers;
+    correctAnswers = statistics.correctAnswers;
+    currentStreak = statistics.currentStreak;
+    bestStreak = statistics.bestStreak;
+  }
+
+  String _titleFromSectionId(String sectionId) {
+    return sectionId
+        .split(RegExp(r'[-_]'))
+        .where((part) => part.isNotEmpty)
+        .map((part) => '${part[0].toUpperCase()}${part.substring(1)}')
+        .join(' ');
   }
 }
 
@@ -325,7 +221,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   final pages = const [
     ('Learn through Bible riddles', 'Read peaceful riddles, answer, and learn from short explanations.'),
     ('Choose a campaign', 'Progress separately through Old Testament and New Testament levels.'),
-    ('Earn hints and stars', 'Use coins for optional hints. Ads and purchases are not required in Phase A.'),
+    ('Earn hints and stars', 'Use coins for optional hints. Ads are always optional in later phases.'),
   ];
 
   @override
@@ -533,7 +429,7 @@ class _GameplayScreenState extends ConsumerState<GameplayScreen> {
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Text(riddle.question, style: Theme.of(context).textTheme.headlineSmall),
                 const SizedBox(height: 20),
-                if (riddle.isTyped)
+                if (riddle.isTypedAnswer)
                   TextField(
                     controller: textController,
                     textInputAction: TextInputAction.done,
@@ -561,7 +457,7 @@ class _GameplayScreenState extends ConsumerState<GameplayScreen> {
           const SizedBox(height: 12),
           Wrap(spacing: 12, runSpacing: 12, children: [
             FilledButton(onPressed: _submit, child: const Text('Submit')),
-            OutlinedButton.icon(onPressed: state.coins >= 30 && hintsUsed < riddle.hints.length ? _hint : null, icon: const Icon(Icons.lightbulb_outline_rounded), label: const Text('Use 30 coins')),
+            OutlinedButton.icon(onPressed: state.coins >= hintCoinCost && hintsUsed < riddle.hints.length ? _hint : null, icon: const Icon(Icons.lightbulb_outline_rounded), label: const Text('Use $hintCoinCost coins')),
           ]),
         ],
       ),
@@ -569,7 +465,11 @@ class _GameplayScreenState extends ConsumerState<GameplayScreen> {
   }
 
   Future<void> _hint() async {
-    await ref.read(gameProvider).spendHintCoin();
+    final spent = await ref.read(gameProvider).spendHintCoin();
+    if (!spent) {
+      setState(() => feedback = 'Not enough coins for a hint.');
+      return;
+    }
     setState(() {
       feedback = widget.riddle.hints[hintsUsed];
       hintsUsed += 1;
@@ -578,31 +478,27 @@ class _GameplayScreenState extends ConsumerState<GameplayScreen> {
 
   Future<void> _submit() async {
     final riddle = widget.riddle;
-    final answer = riddle.isTyped ? textController.text : selectedChoice ?? '';
+    final answer = riddle.isTypedAnswer ? textController.text : selectedChoice ?? '';
     if (answer.trim().isEmpty) {
       setState(() => feedback = 'Choose or type an answer first.');
       return;
     }
     attempts += 1;
-    if (isAcceptedAnswer(answer, [riddle.answer, ...riddle.acceptedAnswers])) {
-      final reward = await ref.read(gameProvider).completeRiddle(riddle, attempts: attempts, hintsUsed: hintsUsed);
-      final stars = calculateStars(attempts: attempts, hintsUsed: hintsUsed);
+    final result = await ref.read(gameProvider).submitAnswer(riddle, answer: answer, attempts: attempts, hintsUsed: hintsUsed);
+    if (result.correct) {
       if (!mounted) return;
       await showDialog<void>(
         context: context,
         builder: (context) => AlertDialog(
           title: const Text('Correct'),
-          content: Text('${riddle.answer}\n\n${riddle.explanation}\n\nReference: ${riddle.reference}\n\nEarned: $stars stars and $reward coins'),
+          content: Text('${riddle.answer}\n\n${riddle.explanation}\n\nReference: ${riddle.reference}\n\nEarned: ${result.stars} stars and ${result.coinsAwarded} coins'),
           actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('Continue'))],
         ),
       );
       if (mounted) Navigator.pop(context);
     } else {
-      await ref.read(gameProvider).recordWrongAnswer();
       setState(() {
-        feedback = isVeryCloseAnswer(answer, [riddle.answer, ...riddle.acceptedAnswers])
-            ? 'Very close. Check the spelling and try again.'
-            : 'Not quite. Try again, use a hint, or reveal another clue.';
+        feedback = result.veryClose ? 'Very close. Check the spelling and try again.' : 'Not quite. Try again, use a hint, or reveal another clue.';
       });
     }
   }
@@ -638,8 +534,9 @@ class SettingsScreen extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(title: const Text('Settings')),
       body: ListView(padding: const EdgeInsets.all(20), children: [
-        const ListTile(title: Text('Ads'), subtitle: Text('Phase A has no forced ads and no required internet.')),
+        const ListTile(title: Text('Ads'), subtitle: Text('No forced ads. Rewarded ads are optional and belong in a later phase.')),
         const ListTile(title: Text('Content status'), subtitle: Text('Sample riddles are marked needs_review.')),
+        const ListTile(title: Text('Storage'), subtitle: Text('Gameplay now uses repository-backed runtime services with a SharedPreferences adapter.')),
         const ListTile(title: Text('Accessibility'), subtitle: Text('Uses Material controls, readable type, labels, and color-independent feedback.')),
         FilledButton.tonalIcon(
           onPressed: () async {
