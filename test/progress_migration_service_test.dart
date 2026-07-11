@@ -5,6 +5,7 @@ import 'package:bible_riddle/data/database/content_database_seeder.dart';
 import 'package:bible_riddle/data/migration/progress_migration_service.dart';
 import 'package:bible_riddle/data/repositories/drift_progress_repository.dart';
 import 'package:bible_riddle/data/repositories/shared_preferences_progress_repository.dart';
+import 'package:bible_riddle/domain/entities/player_progress.dart';
 import 'package:bible_riddle/domain/entities/riddle.dart';
 import 'package:bible_riddle/domain/entities/testament.dart';
 import 'package:drift/native.dart';
@@ -14,10 +15,11 @@ import 'package:shared_preferences/shared_preferences.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  late AppDatabase database;
+  AppDatabase? database;
 
   tearDown(() async {
-    await database.close();
+    await database?.close();
+    database = null;
   });
 
   test('migrates the original Phase A save keys into Drift', () async {
@@ -30,10 +32,13 @@ void main() {
       'bestStreak': 4,
     });
     final preferences = await SharedPreferences.getInstance();
-    database = AppDatabase(NativeDatabase.memory());
-    await ContentDatabaseSeeder(database).seedRiddles(const [sampleRiddle]);
+    final activeDatabase = AppDatabase(NativeDatabase.memory());
+    database = activeDatabase;
+    await ContentDatabaseSeeder(activeDatabase).seedRiddles(
+      const [sampleRiddle],
+    );
 
-    final driftRepository = DriftProgressRepository(database);
+    final driftRepository = DriftProgressRepository(activeDatabase);
     await ProgressMigrationService(
       preferences: preferences,
       legacyRepository: SharedPreferencesProgressRepository(preferences),
@@ -54,10 +59,13 @@ void main() {
       'coins': 150,
     });
     final preferences = await SharedPreferences.getInstance();
-    database = AppDatabase(NativeDatabase.memory());
-    await ContentDatabaseSeeder(database).seedRiddles(const [sampleRiddle]);
+    final activeDatabase = AppDatabase(NativeDatabase.memory());
+    database = activeDatabase;
+    await ContentDatabaseSeeder(activeDatabase).seedRiddles(
+      const [sampleRiddle],
+    );
 
-    final driftRepository = DriftProgressRepository(database);
+    final driftRepository = DriftProgressRepository(activeDatabase);
     final migration = ProgressMigrationService(
       preferences: preferences,
       legacyRepository: SharedPreferencesProgressRepository(preferences),
@@ -66,25 +74,16 @@ void main() {
 
     await migration.migrateIfNeeded();
     await driftRepository.saveEconomy(
-      const PlayerEconomyForTest(coins: 222).value,
+      const PlayerEconomy(
+        coins: 222,
+        totalCoinsEarned: 222,
+        totalCoinsSpent: 0,
+      ),
     );
     await migration.migrateIfNeeded();
 
     expect((await driftRepository.getEconomy()).coins, 222);
   });
-}
-
-class PlayerEconomyForTest {
-  const PlayerEconomyForTest({required int coins})
-      : value = const _EconomyFactory().create(coins);
-
-  final dynamic value;
-}
-
-class _EconomyFactory {
-  const _EconomyFactory();
-
-  dynamic create(int coins) => throw UnimplementedError();
 }
 
 const sampleRiddle = Riddle(
