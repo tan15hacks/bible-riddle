@@ -1,0 +1,6 @@
+{
+  "version": 1,
+  "packs": ["riddles_phase_a.json"],
+  "sampleContentStatus": "needs_review",
+  "totalSampleRiddles": 20
+}
