@@ -1,7 +1,7 @@
 name: bible_riddle
 publish_to: 'none'
-description: Peaceful minimalist Bible riddle game - Phase B data layer.
-version: 0.2.0+2
+description: Peaceful minimalist offline Bible riddle game.
+version: 0.3.0+3
 
 environment:
   sdk: '>=3.4.0 <4.0.0'
