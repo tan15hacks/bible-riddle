@@ -1,4 +1,5 @@
-import 'package:bible_riddle/core/database/app_database.dart';
+import 'package:bible_riddle/core/database/app_database.dart'
+    show AppDatabase;
 import 'package:bible_riddle/data/database/content_database_seeder.dart';
 import 'package:bible_riddle/data/repositories/drift_progress_repository.dart';
 import 'package:bible_riddle/domain/entities/player_progress.dart';
